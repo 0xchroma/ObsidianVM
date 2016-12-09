@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <iostream>
 #include <memory>
+#include <random>
 
 #include "Opcode.h"
 
@@ -45,32 +46,42 @@ struct VM
 
 	OpPack bytecode;
 	std::map<uint32_t, std::vector<uint8_t>> data_object;
-	std::map<std::string, std::shared_ptr<FunctionType>> function_object;
+	std::map<uint32_t, std::shared_ptr<FunctionType>> function_object;
 
-	template <typename T>
-	void AddData(const uint32_t id, const T&& data)
+	VM()
 	{
-		data_object[id] = { data.begin(), data.end() };
-		data_object[id].push_back(0x00);
 	}
 
-	bool AddFunction(const std::string internal_name, const std::string module_name, const std::string func_name)
+	template <typename T>
+	std::pair<ArgType, uint32_t> AddData(const T&& data)
 	{
+		auto accessor = Rand();
+
+		data_object[accessor] = { data.begin(), data.end() };
+		data_object[accessor].push_back(0x00);
+
+		return { ArgType::Ptr, accessor };
+	}
+
+	uint32_t AddFunction(const std::string module_name, const std::string func_name)
+	{
+		auto accessor = Rand();
+
 		try
 		{
-			function_object[internal_name] = std::make_shared<FunctionType>(module_name, func_name);
+			function_object[accessor] = std::make_shared<FunctionType>(module_name, func_name);
 		} catch (const std::exception& e)
 		{
 			std::cerr << e.what() << std::endl;
-			return false;
+			return 0;
 		}
 
-		return true;
+		return accessor;
 	}
 
-	bool AddCall(std::string func_name, std::vector<std::pair<ArgType, uint32_t>> arg_pack)
+	bool BuildCall(uint32_t accessor, std::vector<std::pair<ArgType, uint32_t>> arg_pack)
 	{
-		if (function_object.find(func_name) == function_object.end())
+		if (function_object.find(accessor) == function_object.end())
 			return false;
 
 		std::reverse(arg_pack.begin(), arg_pack.end());
@@ -80,25 +91,22 @@ struct VM
 			switch (arg.first)
 			{
 			case Val:
-				AddBytecode({ x86PUSHDIR8, static_cast<uint8_t>(arg.second) });
+				AddBytecode({ x86PUSHDIR32 });
 				break;
 
 			case Ptr:
-				{
-					auto data_address = reinterpret_cast<uint32_t>(data_object[arg.second].data());
-					AddBytecode({ x86PUSHDIR32 });
-					AddBytecode(u32ToOp(data_address));
-				}
+				AddBytecode({ x86PUSHDIR32 });
 				break;
 
 			default:
-				AddBytecode({ x86PUSHDIR8, static_cast<uint8_t>(arg.second) });
 				break;
 			}
+
+			AddBytecode(u32ToOp(reinterpret_cast<uint32_t>(data_object[arg.second].data())));
 		}
 
 		AddBytecode({ x86MOVEAXDIR });
-		AddBytecode(function_object[func_name]->AddressBytes);
+		AddBytecode(function_object[accessor]->AddressBytes);
 		AddBytecode({ x86CALLEAX });
 
 		return true;
@@ -133,6 +141,8 @@ struct VM
 			return false;
 		}
 
+		VirtualFree(func_pointer, 0, MEM_RELEASE);
+
 		return true;
 	}
 
@@ -143,6 +153,14 @@ struct VM
 		memcpy(&ret_pack[0], &addr, sizeof(uint32_t));
 
 		return ret_pack;
+	}
+
+	static uint32_t Rand()
+	{
+		std::random_device rd;
+		std::mt19937 gen(rd());
+
+		return static_cast<uint32_t>(gen());
 	}
 };
 
@@ -161,11 +179,10 @@ int main(int argc, const char* argv[])
 		return -1;
 	}
 
-	virtual_machine->AddData(0x01, std::string("Well fuck my ass!!"));
-	virtual_machine->AddFunction("messagebox", "user32.dll", "MessageBoxA");
+	auto string_data = virtual_machine->AddData(std::string("Well fuck my ass!!"));
+	auto messagebox_func = virtual_machine->AddFunction("user32.dll", "MessageBoxA");
 
-	virtual_machine->AddCall("messagebox", { { Val, 0 }, { Ptr, 0x01 }, { Ptr, 0x01 }, { Val, 0 } });
-
+	virtual_machine->BuildCall(messagebox_func, { null_arg, string_data, null_arg, { Val, MB_OK } });
 	virtual_machine->AddBytecode({ x86RET });
 
 	if (!virtual_machine->Exec(false))

@@ -11,6 +11,8 @@ enum ArgType
 	Ptr
 };
 
+#define null_arg		{ Val, 0 }
+
 #define x86CALLEAX		0xff, 0xd0
 #define x86CALLREF		0xff, 0x15
 #define x86RET			0xc3
