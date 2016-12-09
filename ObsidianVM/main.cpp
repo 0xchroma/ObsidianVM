@@ -44,13 +44,14 @@ struct VM
 	typedef void(__stdcall*program_template)(void);
 
 	OpPack bytecode;
-	std::map<std::string, std::vector<uint8_t>> data_object;
+	std::map<uint32_t, std::vector<uint8_t>> data_object;
 	std::map<std::string, std::shared_ptr<FunctionType>> function_object;
 
 	template <typename T>
-	void AddData(const std::string name, const T data)
+	void AddData(const uint32_t id, const T&& data)
 	{
-		data_object[name] = { data.begin(), data.end() };
+		data_object[id] = { data.begin(), data.end() };
+		data_object[id].push_back(0x00);
 	}
 
 	bool AddFunction(const std::string internal_name, const std::string module_name, const std::string func_name)
@@ -79,14 +80,19 @@ struct VM
 			switch (arg.first)
 			{
 			case Val:
-				AddBytecode({ x86PUSHDIR8, 0x00 });
+				AddBytecode({ x86PUSHDIR8, static_cast<uint8_t>(arg.second) });
 				break;
 
 			case Ptr:
+				{
+					auto data_address = reinterpret_cast<uint32_t>(data_object[arg.second].data());
+					AddBytecode({ x86PUSHDIR32 });
+					AddBytecode(u32ToOp(data_address));
+				}
 				break;
 
 			default:
-				AddBytecode({ x86PUSHDIR8, 0x00 });
+				AddBytecode({ x86PUSHDIR8, static_cast<uint8_t>(arg.second) });
 				break;
 			}
 		}
@@ -155,9 +161,10 @@ int main(int argc, const char* argv[])
 		return -1;
 	}
 
+	virtual_machine->AddData(0x01, std::string("Well fuck my ass!!"));
 	virtual_machine->AddFunction("messagebox", "user32.dll", "MessageBoxA");
 
-	virtual_machine->AddCall("messagebox", { { Val, 0 }, { Val, 0 }, { Val, 0 }, { Val, 0 } });
+	virtual_machine->AddCall("messagebox", { { Val, 0 }, { Ptr, 0x01 }, { Ptr, 0x01 }, { Val, 0 } });
 
 	virtual_machine->AddBytecode({ x86RET });
 
