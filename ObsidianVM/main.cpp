@@ -179,10 +179,11 @@ int main(int argc, const char* argv[])
 		return -1;
 	}
 
-	auto string_data = virtual_machine->AddData(std::string("Well fuck my ass!!"));
+	auto message = virtual_machine->AddData(std::string("Well fuck my ass!!"));
+	auto title = virtual_machine->AddData(std::string("Some magical message!!!"));
 	auto messagebox_func = virtual_machine->AddFunction("user32.dll", "MessageBoxA");
 
-	virtual_machine->BuildCall(messagebox_func, { null_arg, string_data, null_arg, { Val, MB_OK } });
+	virtual_machine->BuildCall(messagebox_func, { null_arg, message, title, { Val, MB_OK } });
 	virtual_machine->AddBytecode({ x86RET });
 
 	if (!virtual_machine->Exec(false))
