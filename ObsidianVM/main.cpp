@@ -179,7 +179,7 @@ int main(int argc, const char* argv[])
 		return -1;
 	}
 
-	auto message = virtual_machine->AddData(std::string("Well fuck my ass!!"));
+	auto message = virtual_machine->AddData(std::string("Well well!!"));
 	auto title = virtual_machine->AddData(std::string("Some magical message!!!"));
 	auto messagebox_func = virtual_machine->AddFunction("user32.dll", "MessageBoxA");
 
