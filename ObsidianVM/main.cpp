@@ -16,7 +16,7 @@ struct FunctionType
 
 	std::vector<OpType> AddressBytes;
 
-	FunctionType(const std::string mod_name, const std::string func_name)
+	FunctionType(const std::string& mod_name, const std::string& func_name)
 	{
 		ModuleHandle = LoadLibraryA(mod_name.c_str());
 
@@ -53,7 +53,7 @@ struct VM
 	}
 
 	template <typename T>
-	std::pair<ArgType, uint32_t> AddData(const T&& data)
+	std::pair<ArgType, uint32_t> AddData(const T& data)
 	{
 		auto accessor = Rand();
 
@@ -63,7 +63,7 @@ struct VM
 		return { ArgType::Ptr, accessor };
 	}
 
-	uint32_t AddFunction(const std::string module_name, const std::string func_name)
+	uint32_t AddFunction(const std::string& module_name, const std::string& func_name)
 	{
 		auto accessor = Rand();
 
@@ -79,7 +79,7 @@ struct VM
 		return accessor;
 	}
 
-	bool BuildCall(uint32_t accessor, std::vector<std::pair<ArgType, uint32_t>> arg_pack)
+	bool BuildCall(uint32_t accessor, const std::vector<std::pair<ArgType, uint32_t>>& arg_pack)
 	{
 		if (function_object.find(accessor) == function_object.end())
 			return false;
@@ -112,12 +112,12 @@ struct VM
 		return true;
 	}
 	
-	void AddBytecode(const OpPack ops)
+	void AddBytecode(const OpPack& ops)
 	{
 		bytecode.insert(bytecode.end(), ops.begin(), ops.end());
 	}
 
-	bool Exec(bool debug = false)
+	bool Exec()
 	{
 		HANDLE func_pointer = VirtualAlloc(nullptr, bytecode.size(), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 
@@ -127,9 +127,6 @@ struct VM
 				throw std::runtime_error("Empty bytecode vector or null function pointer");
 
 			memcpy(func_pointer, bytecode.data(), bytecode.size());
-			
-			if (debug)
-				__debugbreak();
 			
 			reinterpret_cast<program_template>(func_pointer)();
 
@@ -164,29 +161,18 @@ struct VM
 	}
 };
 
-static std::unique_ptr<VM> virtual_machine = nullptr;
-
 int main(int argc, const char* argv[])
 {
-	try
-	{
-		virtual_machine = std::make_unique<VM>();
-	} catch(const std::exception& e)
-	{
-		std::cerr << e.what() << std::endl;
-		std::cin.ignore();
+	VM virtual_machine;
 
-		return -1;
-	}
+	auto message = virtual_machine.AddData(std::string("Well well!!"));
+	auto title = virtual_machine.AddData(std::string("Some magical message!!!"));
+	auto messagebox_func = virtual_machine.AddFunction("user32.dll", "MessageBoxA");
 
-	auto message = virtual_machine->AddData(std::string("Well well!!"));
-	auto title = virtual_machine->AddData(std::string("Some magical message!!!"));
-	auto messagebox_func = virtual_machine->AddFunction("user32.dll", "MessageBoxA");
+	virtual_machine.BuildCall(messagebox_func, { null_arg, message, title, { Val, MB_OK } });
+	virtual_machine.AddBytecode({ x86RET });
 
-	virtual_machine->BuildCall(messagebox_func, { null_arg, message, title, { Val, MB_OK } });
-	virtual_machine->AddBytecode({ x86RET });
-
-	if (!virtual_machine->Exec(false))
+	if (!virtual_machine.Exec(false))
 		std::cin.ignore();
 
 	return 0;
